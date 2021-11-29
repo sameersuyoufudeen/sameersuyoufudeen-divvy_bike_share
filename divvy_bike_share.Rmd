@@ -1,0 +1,948 @@
+---
+title: 'Divvy Bike Share : Analysis'
+author: "Sameer Suyoufudeen"
+date: "28/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### About the company
+
+In 2016, Divvy launched a successful bike-share offering. Since then, the program has grown to a fleet of 5824 bicycles that are geotracked and locked into a network of 692 stations across Chicago. The bikes can be unlocked from one station and returned to any other station in the system anytime.
+
+Customers who purchase single-ride or full-day passes are referred to as "Casual" Riders.
+Customers who purchase annual memberships are "Member" Riders.
+
+### Task
+
+The primary objective is to find the difference between casual riders and member riders, how they use the Divvy  bikes differently. On that basis, the company shall build a new model which will attract casual riders to enroll for the annual membership.
+
+### Data Sources
+
+The data set from the year 2013-2021 is used (the data is available till October, 2021). The data provides details about how customers are using the bicycle service. The data is provided by Motivate International Inc under this license. for public use. The data is downloaded and organized in folders in ascending order. The data provides the details about the trips and stations used by the customers with single or full-day passes, and individuals with annual memberships. "Casual Rider" is a rider who purchased single ride or 24-hour pass, whereas "Member Rider" is a rider who purchased an Annual Membership.
+
+### Libraries used during the case study
+
+
+```{r}
+library(tidyverse)     # Collection of R packages for preparing, wrangling and visualizing data
+library(readxl)        # package for extracting data from Excel
+library(lubridate)     # Makes easier to format dates
+library(modeest)       # used for mode estimation 
+library(pivottabler)   # Creates pivot tables
+library(scales)        # Scales functionds for visualisation
+library(gridExtra)     # arrange multiple grid-based plots on a page, and draw tables.
+library(anytime)       # for converting to datetime formats/30
+```
+
+### Importing and combining the data files
+
+The data sets of the respective years (2013-2021) are imported and combined into one file. The data type of every column is set during importing process to avoid errors.
+
+### Data Transformation and Wrangling
+
+In some parts of the data the column names are consistent. Renaming is done to avoid any misunderstanding during the data analysis process. The new columns are created to get for proper understanding of the data. The unnecessary columns are excluded to make data more consistent and extract the answers to the business question.
+
+Improper entries like empty cell, improper data type or data structure are excluded during data analysis process. Microsoft Excel is used at some point of transformation like renaming column, formatting dates.
+
+### Data Analysis
+
+The analysis is carried to get the answer to the business question. To better understand the data set, statistical formulas are used on the data set, and pivot tables are generated. For understanding the rider's behaviour during the years, the visualization tool is used to get the overall picture of the data set and explain the difference between Casual Riders and Annual Member Riders.
+
+# Cyclistic Bike Share 2013 Data Set
+```{r}
+
+# Importing and Combining all related datasets
+trips_2013 <- read_csv("Data sources/Divvy_Trips_2013.csv"
+                       ,col_types = cols(trip_id = "i"
+                                         ,bikeid = "i"
+                                         ,tripduration = "d"
+                                         ,from_station_id = "i"
+                                         ,from_station_name = "c"
+                                         ,to_station_id = "i"
+                                         ,to_station_name = "c"
+                                         ,usertype = "c"
+                                         ,gender = "c"
+                                         ,birthday = "i"))
+# Data transformation & wrangling
+trips_2013 <- select(trips_2013, -birthday, -gender, -from_station_id, -to_station_id)
+trips_2013$usertype[trips_2013$usertype == 'Customer'] <- "Casual"
+trips_2013$usertype[trips_2013$usertype == 'Subscriber'] <- "Member"
+trips_2013$day <- wday(trips_2013$starttime, label = TRUE, abbr = FALSE)
+trips_2013$month <- month(trips_2013$starttime, label = TRUE, abbr = FALSE)
+```
+
+### Data Analysis
+```{r}
+paste("The Average time riders spent riding bikes in 2013:", round(mean(trips_2013$tripduration), digits = 2), "seconds")
+paste("The longest duration a rider used the bike in 2013 was", max(trips_2013$tripduration), "seconds")
+paste("The most popular day of booking was", mfv(trips_2013$day), "in 2013")
+paste("The most popular month of booking was", mfv(trips_2013$month))
+
+#generating new data frame
+trips_2013_pivot <- trips_2013 %>%
+  group_by(usertype) %>%
+  summarize("Average Ride Length" = round(mean(tripduration), digits = 2),
+            "Number of Rides" = length(trip_id),
+            "Year" = year(trips_2013$starttime), .groups = 'drop')
+trips_2013_pivot <- unique(trips_2013_pivot)
+
+  
+#pivot table
+qhpvt(trips_2013, rows = "day", columns = "usertype", calculations = c("Avg_ride_length" = "round(mean(tripduration), digits =2)", "no_of_riders" = "length(trip_id)"))
+```
+### Data Visualisation
+```{r}
+#function to set plot size
+fig <- function(width, height){
+  options(repr.plot.width = width, repr.plot.height = height)
+}
+
+```
+
+```{r}
+p1 <- ggplot(trips_2013, mapping = aes(x = day, fill = usertype)) +
+  geom_bar(position = "dodge")+ scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3)) + 
+  labs(x = "Week Days", y = "Number of Riders", 
+       title = "Divvy bikes riders data",
+       subtitle = "Year: 2013 (Weekly)")+
+  scale_fill_discrete(name = "Type of Riders", labels = c("Casual Riders", "Member Riders")) +
+theme(text = element_text(size = 10))
+```
+```{r}
+# Trip duration of riders in 2013
+p2 <- ggplot(trips_2013, mapping = aes(x = day, y = tripduration)) + 
+  geom_col() + facet_wrap(~usertype) + scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +
+  labs(x = "Week Days", y = "Total Trip Duration (in Seconds)", 
+       title = "Trip Duration of the Riders (Year: 2013)",
+       subtitle = "The graph represents the total trip duration of riders on everday of the week in 2013.") +
+    theme(axis.text.x = element_text(angle =45), text = element_text(size = 10))
+fig(18, 15)
+grid.arrange(p1, p2)
+
+```
+# Divvy bikes 2014 dataset
+```{r}
+# importing & combining all related datasets
+trips_2014 <- rbind(read_csv("Data sources/Divvy_Trips_2014_Q1Q2.csv"
+                       ,col_types = cols(trip_id = "i"
+                                         ,bikeid = "i"
+                                         ,tripduration = "d"
+                                         ,from_station_id = "i"
+                                         ,from_station_name = "c"
+                                         ,to_station_id = "i"
+                                         ,to_station_name = "c"
+                                         ,usertype = "c"
+                                         ,gender = "c"
+                                         ,birthyear = "i"))
+                    ,read_csv("Data sources/Divvy_Trips_2014-Q3-07.csv"
+                       ,col_types = cols(trip_id = "i"
+                                         ,bikeid = "i"
+                                         ,tripduration = "d"
+                                         ,from_station_id = "i"
+                                         ,from_station_name = "c"
+                                         ,to_station_id = "i"
+                                         ,to_station_name = "c"
+                                         ,usertype = "c"
+                                         ,gender = "c"
+                                         ,birthyear = "i"))
+                    ,read_csv("Data sources/Divvy_Trips_2014-Q3-0809.csv"
+                       ,col_types = cols(trip_id = "i"
+                                         ,bikeid = "i"
+                                         ,tripduration = "d"
+                                         ,from_station_id = "i"
+                                         ,from_station_name = "c"
+                                         ,to_station_id = "i"
+                                         ,to_station_name = "c"
+                                         ,usertype = "c"
+                                         ,gender = "c"
+                                         ,birthyear = "i"))
+                    ,read_csv("Data sources/Divvy_Trips_2014-Q4.csv"
+                       ,col_types = cols(trip_id = "i"
+                                         ,bikeid = "i"
+                                         ,tripduration = "d"
+                                         ,from_station_id = "i"
+                                         ,from_station_name = "c"
+                                         ,to_station_id = "i"
+                                         ,to_station_name = "c"
+                                         ,usertype = "c"
+                                         ,gender = "c"
+                                         ,birthyear = "i")))
+```
+```{r}
+# Data transformation & wrangling
+trips_2014 <- select(trips_2014, -birthyear, -gender, -to_station_id, -from_station_id)
+trips_2014$start_time <- anytime(trips_2014$starttime)
+trips_2014$starttime <- mdy_hms(trips_2014$starttime)
+trips_2014$stoptime <- mdy_hms(trips_2014$stoptime)
+trips_2014$day <- wday(trips_2014$starttime, label = TRUE, abbr = FALSE)
+trips_2014$usertype[trips_2014$usertype == 'Customer'] <- "Casual"
+trips_2014$usertype[trips_2014$usertype == 'Subscriber'] <- "Member"
+trips_2014$month <- month(trips_2014$starttime, label = TRUE, abbr = FALSE)
+
+```
+
+
+### Data Analysis
+```{r}
+paste("The Average time riders spent riding bikes in 2014:", round(mean(trips_2014$tripduration), digits = 2), "seconds")
+paste("The longest duration a rider used the bike in 2014 was", max(trips_2014$tripduration), "seconds")
+paste("The most popular day of booking was", mfv(trips_2014$day), "in 2014")
+paste("The most popular month of booking was", mfv(trips_2014$month))
+
+#generating new data frame
+trips_2014_pivot <- trips_2014 %>%
+  group_by(usertype) %>%
+  summarize("Average Ride Length" = round(mean(tripduration), digits = 2),
+            "Number of Rides" = length(trip_id),
+            "Year" = year(trips_2014$starttime), .groups = 'drop')
+trips_2014_pivot <- unique(trips_2014_pivot)
+
+
+#pivot table
+qhpvt(trips_2014, rows = "day", columns = "usertype", calculations = c("Avg_ride_length" = "round(mean(tripduration), digits =2)", "no_of_riders" = "length(trip_id)"))
+```
+### Data Visualisation
+```{r}
+#function to set plot size
+fig <- function(width, height){
+  options(repr.plot.width = width, repr.plot.height = height)
+}
+
+```
+
+```{r}
+p1 <- ggplot(trips_2014, mapping = aes(x = day, fill = usertype)) +
+  geom_bar(position = "dodge")+ scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3)) + 
+  labs(x = "Week Days", y = "Number of Riders", 
+       title = "Divvy bikes riders data",
+       subtitle = "Year: 2014 (Weekly)")+
+  scale_fill_discrete(name = "Type of Riders", labels = c("Casual Riders", "Member Riders")) +
+  theme(text = element_text(size = 10))
+```
+```{r}
+# Trip duration of riders in 2013
+p2 <- ggplot(trips_2014, mapping = aes(x = day, y = tripduration)) + 
+  geom_col() + facet_wrap(~usertype) + scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +
+  labs(x = "Week Days", y = "Total Trip Duration (in Seconds)", 
+       title = "Trip Duration of the Riders (Year: 2014)",
+       subtitle = "The graph represents the total trip duration of riders on everday of the week in 2013.") +
+  theme(axis.text.x = element_text(angle =45), text = element_text(size = 10))
+fig(18, 15)
+grid.arrange(p1, p2)
+
+```
+# Divvy bikes 2015 Dataset
+```{r}
+# importing and combining all related datasets
+trips_2015 <- rbind(read_csv("Data sources/Divvy_Trips_2015-Q1.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2015-Q2.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2015_07.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2015_08.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2015_09.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2015_Q4.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i")))
+# data transformation and wrangling
+trips_2015 <- select(trips_2015, -birthyear, -gender, -from_station_id, -to_station_id)
+trips_2015$usertype[trips_2015$usertype == 'Subscriber'] <- "Member"
+trips_2015$usertype[trips_2015$usertype == 'Customer'] <- "Casual"
+trips_2015$starttime <- anytime(trips_2015$starttime)
+trips_2015$day <- wday(trips_2015$starttime, label = TRUE, abbr = FALSE)
+trips_2015$month <- month(trips_2015$starttime, label = TRUE, abbr = FALSE)
+
+
+```
+
+### Data Analysis
+```{r}
+paste("The Average time riders spent riding bikes in 2015:", round(mean(trips_2015$tripduration), digits = 2), "seconds")
+paste("The longest duration a rider used the bike in 2015 was", max(trips_2015$tripduration), "seconds")
+paste("The most popular day of booking was", mfv(trips_2015$day), "in 2015")
+paste("The most popular month of booking was", mfv(trips_2015$month))
+
+# creating a new dataframe
+trips_2015_pivot <- trips_2015 %>%
+  group_by(usertype) %>%
+  summarize("Average Ride Length" = round(mean(tripduration), digits = 2),
+            "Number of Rides" = length(trip_id),
+            "Year" = year(trips_2015$starttime), .groups = 'drop')
+trips_2015_pivot <- unique(trips_2015_pivot)
+
+# pivot table
+qhpvt(trips_2015, rows = 'day', columns = 'usertype', calculations = c("Average Ride Length" = "round(mean(tripduration), digits = 2)", "Number of rides" = "length(trip_id)"))
+```
+### Data visualisation 
+```{r}
+# Number of riders in 2015
+p1 <- ggplot(trips_2015, mapping = aes(x = day, fill = usertype)) +
+  geom_bar(position = 'dodge') + scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3)) +
+  labs(x = "Weekdays", y = "Number of Riders"
+       ,title = " Divvy Bikes riders data"
+       ,subtitle = "Year : 2015 (Weekly)" +
+         scale_fill_discrete(name = "Type of Riders", labels = c("Casual Riders","Annual Member Riders" ,"Dependent")) +
+theme(text = element_text(size = 10))) 
+
+# Trip duration of riders in 2015
+p2 <- ggplot(trips_2015, mapping = aes(x = day, y = tripduration)) + 
+  geom_col() + facet_wrap(~usertype) + scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +
+  labs(x = "Week Days", y = "Total Trip Duration (in Seconds)", 
+       title = "Trip Duration of the Riders (Year: 2015)",
+       subtitle = "The graph represents the total trip duration of riders on everday of the week in 2015.") +
+    theme(axis.text.x = element_text(angle =45), text = element_text(size = 10))
+fig(18, 15)
+grid.arrange(p1, p2)
+```
+# Divvy bikes 2016 Dataset
+```{r}
+# importing and combining all related datasets
+trips_2016 <- rbind(read_csv("Data sources/Divvy_Trips_2016_Q1.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2016_04.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2016_05.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2016_06.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2016_Q3.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2016_Q4.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i")))
+# data transformation and wrangling
+trips_2016 <- select(trips_2016, -birthyear, -gender, -from_station_id, -to_station_id)
+trips_2016$usertype[trips_2016$usertype == 'Subscriber'] <- "Member"
+trips_2016$usertype[trips_2016$usertype == 'Customer'] <- "Casual"
+trips_2016$starttime <- anytime(trips_2016$starttime)
+trips_2016$day <- wday(trips_2016$starttime, label = TRUE, abbr = FALSE)
+trips_2016$month <- month(trips_2016$starttime, label = TRUE, abbr = FALSE)
+
+
+```
+
+### Data Analysis
+```{r}
+paste("The Average time riders spent riding bikes in 2016:", round(mean(trips_2016$tripduration), digits = 2), "seconds")
+paste("The longest duration a rider used the bike in 2016 was", max(trips_2016$tripduration), "seconds")
+paste("The most popular day of booking was", mfv(trips_2016$day), "in 2016")
+paste("The most popular month of booking was", mfv(trips_2016$month))
+
+# creating a new dataframe
+trips_2016_pivot <- trips_2016 %>%
+  group_by(usertype) %>%
+  summarize("Average Ride Length" = round(mean(tripduration), digits = 2),
+            "Number of Rides" = length(trip_id),
+            "Year" = year(trips_2016$starttime), .groups = 'drop')
+trips_2016_pivot <- unique(trips_2016_pivot)
+
+# pivot table
+qhpvt(trips_2016, rows = 'day', columns = 'usertype', calculations = c("Average Ride Length" = "round(mean(tripduration), digits = 2)", "Number of rides" = "length(trip_id)"))
+```
+### Data visualisation 
+```{r}
+# Number of riders in 2016
+p1 <- ggplot(trips_2016, mapping = aes(x = day, fill = usertype)) +
+  geom_bar(position = 'dodge') + scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3)) +
+  labs(x = "Weekdays", y = "Number of Riders"
+       ,title = " Divvy Bikes riders data"
+       ,subtitle = "Year : 2016 (Weekly)" +
+         scale_fill_discrete(name = "Type of Riders", labels = c("Casual Riders","Annual Member Riders" ,"Dependent")) +
+theme(text = element_text(size = 10))) 
+
+# Trip duration of riders in 2017
+p2 <- ggplot(trips_2016, mapping = aes(x = day, y = tripduration)) + 
+  geom_col() + facet_wrap(~usertype) + scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +
+  labs(x = "Week Days", y = "Total Trip Duration (in Seconds)", 
+       title = "Trip Duration of the Riders (Year: 2016)",
+       subtitle = "The graph represents the total trip duration of riders everday of the week in 2016.") +
+    theme(axis.text.x = element_text(angle =45), text = element_text(size = 10))
+fig(18, 15)
+grid.arrange(p1, p2)
+```
+
+
+# Divvy bikes 2017 Dataset
+```{r}
+# importing and combining all related datasets
+trips_2017 <- rbind(read_csv("Data sources/Divvy_Trips_2017_Q1.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2017_Q2.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2017_Q3.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2017_Q4.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,tripduration = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i")))
+                            
+# data transformation and wrangling
+trips_2017 <- select(trips_2017,  -from_station_id, -to_station_id)
+trips_2017$usertype[trips_2017$usertype == 'Subscriber'] <- "Member"
+trips_2017$usertype[trips_2017$usertype == 'Customer'] <- "Casual"
+trips_2017$start_time <- anytime(trips_2017$start_time)
+trips_2017$day <- wday(trips_2017$start_time, label = TRUE, abbr = FALSE)
+trips_2017$month <- month(trips_2017$start_time, label = TRUE, abbr = FALSE)
+
+
+```
+
+### Data Analysis
+```{r}
+paste("The Average time riders spent riding bikes in 2017:", round(mean(trips_2017$tripduration), digits = 2), "seconds")
+paste("The longest duration a rider used the bike in 2017 was", max(trips_2017$tripduration), "seconds")
+paste("The most popular day of booking was", mfv(trips_2017$day), "in 2017")
+paste("The most popular month of booking was", mfv(trips_2017$month))
+
+# creating a new dataframe
+trips_2017_pivot <- trips_2017 %>%
+  group_by(usertype) %>%
+  summarize("Average Ride Length" = round(mean(tripduration), digits = 2),
+            "Number of Rides" = length(trip_id),
+            "Year" = year(trips_2017$start_time), .groups = 'drop')
+trips_2017_pivot <- unique(trips_2017_pivot)
+
+# pivot table
+qhpvt(trips_2017, rows = 'day', columns = 'usertype', calculations = c("Average Ride Length" = "round(mean(tripduration), digits = 2)", "Number of rides" = "length(trip_id)"))
+```
+### Data visualisation 
+```{r}
+# Number of riders in 2017
+p1 <- ggplot(trips_2017, mapping = aes(x = day, fill = usertype)) +
+  geom_bar(position = 'dodge') + scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3)) +
+  labs(x = "Weekdays", y = "Number of Riders"
+       ,title = " Divvy Bikes riders data"
+       ,subtitle = "Year : 2017 (Weekly)" +
+         scale_fill_discrete(name = "Type of Riders", labels = c("Casual Riders","Annual Member Riders" ,"Dependent")) +
+theme(text = element_text(size = 10))) 
+
+# Trip duration of riders in 2017
+p2 <- ggplot(trips_2017, mapping = aes(x = day, y = tripduration)) + 
+  geom_col() + facet_wrap(~usertype) + scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +
+  labs(x = "Week Days", y = "Total Trip Duration (in Seconds)", 
+       title = "Trip Duration of the Riders (Year: 2017)",
+       subtitle = "The graph represents the total trip duration of riders everday of the week in 2017.") +
+    theme(axis.text.x = element_text(angle =45), text = element_text(size = 10))
+fig(18, 15)
+grid.arrange(p1, p2)
+```
+# Divvy bikes 2018 Dataset
+```{r}
+# importing and combining all related datasets
+trips_2018_q1 <- read_csv("Data sources/Divvy_Trips_2018_Q1.csv"
+                             ,col_types = cols('01 - Rental Details Rental ID' = "i"
+                                               ,'01 - Rental Details Bike ID' = "i"
+                                               ,'03 - Rental Start Station ID' = "i"
+                                               ,'03 - Rental Start Station Name' = "c"
+                                               ,'02 - Rental End Station ID' = "i"
+                                               ,'02 - Rental End Station Name' = "c"
+                                               ,'User Type' = "c"
+                                               ,'Member Gender' = "c"
+                                               ,'05 - Member Details Member Birthday Year' = "i"))
+trips_2018_q1 <- rename(trips_2018_q1, trip_id = `01 - Rental Details Rental ID`
+                        ,start_time = `01 - Rental Details Local Start Time`
+                        ,end_time = `01 - Rental Details Local End Time`
+                        ,bikeid = `01 - Rental Details Bike ID`
+                        ,tripduration = `01 - Rental Details Duration In Seconds Uncapped`
+                        ,from_station_id = `03 - Rental Start Station ID`
+                        ,from_station_name = `03 - Rental Start Station Name`
+                        ,to_station_id = `02 - Rental End Station ID`
+                        ,to_station_name = `02 - Rental End Station Name`
+                        ,usertype = `User Type`
+                        ,gender = `Member Gender`
+                        ,birthyear = `05 - Member Details Member Birthday Year`)
+trips_2018_q2q3q4<- rbind(read_csv("Data sources/Divvy_Trips_2018_Q2.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2018_Q3.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+                             ,read_csv("Data sources/Divvy_Trips_2018_Q4.csv"
+                             ,col_types = cols( trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i")))
+trips_2018 <- rbind(trips_2018_q1, trips_2018_q2q3q4)
+                            
+# data transformation and wrangling
+trips_2018 <- select(trips_2018, -birthyear, -gender, -from_station_id, -to_station_id)
+trips_2018$usertype[trips_2018$usertype == 'Subscriber'] <- "Member"
+trips_2018$usertype[trips_2018$usertype == 'Customer'] <- "Casual"
+trips_2018$start_time <- anytime(trips_2018$start_time)
+trips_2018$day <- wday(trips_2018$start_time, label = TRUE, abbr = FALSE)
+trips_2018$month <- month(trips_2018$start_time, label = TRUE, abbr = FALSE)
+
+
+```
+
+### Data Analysis
+```{r}
+paste("The Average time riders spent riding bikes in 2018:", round(mean(trips_2018$tripduration), digits = 2), "seconds")
+paste("The longest duration a rider used the bike in 2018 was", max(trips_2018$tripduration), "seconds")
+paste("The most popular day of booking was", mfv(trips_2018$day), "in 2018")
+paste("The most popular month of booking was", mfv(trips_2018$month))
+
+# creating a new dataframe
+trips_2018_pivot <- trips_2018 %>%
+  group_by(usertype) %>%
+  summarize("Average Ride Length" = round(mean(tripduration), digits = 2),
+            "Number of Rides" = length(trip_id),
+            "Year" = year(trips_2018$start_time), .groups = 'drop')
+trips_2018_pivot <- unique(trips_2018_pivot)
+
+# pivot table
+qhpvt(trips_2018, rows = 'day', columns = 'usertype', calculations = c("Average Ride Length" = "round(mean(tripduration), digits = 2)", "Number of rides" = "length(trip_id)"))
+```
+### Data visualisation 
+```{r}
+# Number of riders in 2018
+p1 <- ggplot(trips_2018, mapping = aes(x = day, fill = usertype)) +
+  geom_bar(position = 'dodge') + scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3)) +
+  labs(x = "Weekdays", y = "Number of Riders"
+       ,title = " Divvy Bikes riders data"
+       ,subtitle = "Year : 2018 (Weekly)" +
+         scale_fill_discrete(name = "Type of Riders", labels = c("Casual Riders","Annual Member Riders")) +
+theme(text = element_text(size = 10))) 
+
+# Trip duration of riders in 2018
+p2 <- ggplot(trips_2018, mapping = aes(x = day, y = tripduration)) + 
+  geom_col() + facet_wrap(~usertype) + scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +
+  labs(x = "Week Days", y = "Total Trip Duration (in Seconds)", 
+       title = "Trip Duration of the Riders (Year: 2018)",
+       subtitle = "The graph represents the total trip duration of riders everday of the week in 2018.") +
+    theme(axis.text.x = element_text(angle = 45), text = element_text(size = 10))
+fig(18, 15)
+grid.arrange(p1, p2)
+
+```
+# Divvy bikes 2019 Dataset
+```{r}
+# importing and combining all related datasets
+trips_2019_q2 <- read_csv("Data sources/Divvy_Trips_2019_Q2.csv"
+                             ,col_types = cols('01 - Rental Details Rental ID' = "i"
+                                               ,'01 - Rental Details Bike ID' = "i"
+                                               ,'03 - Rental Start Station ID' = "i"
+                                               ,'03 - Rental Start Station Name' = "c"
+                                               ,'02 - Rental End Station ID' = "i"
+                                               ,'02 - Rental End Station Name' = "c"
+                                               ,'User Type' = "c"
+                                               ,'Member Gender' = "c"
+                                               ,'05 - Member Details Member Birthday Year' = "i"))
+trips_2019_q2 <- rename(trips_2019_q2, trip_id = `01 - Rental Details Rental ID`
+                        ,start_time = `01 - Rental Details Local Start Time`
+                        ,end_time = `01 - Rental Details Local End Time`
+                        ,bikeid = `01 - Rental Details Bike ID`
+                        ,tripduration = `01 - Rental Details Duration In Seconds Uncapped`
+                        ,from_station_id = `03 - Rental Start Station ID`
+                        ,from_station_name = `03 - Rental Start Station Name`
+                        ,to_station_id = `02 - Rental End Station ID`
+                        ,to_station_name = `02 - Rental End Station Name`
+                        ,usertype = `User Type`
+                        ,gender = `Member Gender`
+                        ,birthyear = `05 - Member Details Member Birthday Year`)
+trips_2019_q1<- read_csv("Data sources/Divvy_Trips_2019_Q1.csv"
+                             ,col_types = cols(trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+trips_2019_q3 <- read_csv("Data sources/Divvy_Trips_2019_Q3.csv"
+                          ,col_types = cols(trip_id = "i"
+                                            ,bikeid = "i"
+                                            ,from_station_id = "i"
+                                            ,from_station_name = "c"
+                                            ,to_station_id = "i"
+                                            ,to_station_name = "c"
+                                            ,usertype = "c"
+                                            ,gender = "c"
+                                            ,birthyear = "i"))
+trips_2019_q4 <- read_csv("Data sources/Divvy_Trips_2019_Q4.csv"
+                             ,col_types = cols( trip_id = "i"
+                                               ,bikeid = "i"
+                                               ,from_station_id = "i"
+                                               ,from_station_name = "c"
+                                               ,to_station_id = "i"
+                                               ,to_station_name = "c"
+                                               ,usertype = "c"
+                                               ,gender = "c"
+                                               ,birthyear = "i"))
+trips_2019 <- rbind(trips_2019_q1, trips_2019_q2, trips_2019_q3, trips_2019_q4)
+                            
+# data transformation and wrangling
+trips_2019 <- select(trips_2019, -birthyear, -gender, -from_station_id, -to_station_id)
+trips_2019$usertype[trips_2019$usertype == 'Subscriber'] <- "Member"
+trips_2019$usertype[trips_2019$usertype == 'Customer'] <- "Casual"
+trips_2019$start_time <- anytime(trips_2019$start_time)
+trips_2019$day <- wday(trips_2019$start_time, label = TRUE, abbr = FALSE)
+trips_2019$month <- month(trips_2019$start_time, label = TRUE, abbr = FALSE)
+
+
+```
+
+### Data Analysis
+```{r}
+paste("The Average time riders spent riding bikes in 2019:", round(mean(trips_2019$tripduration), digits = 2), "seconds")
+paste("The longest duration a rider used the bike in 2019 was", max(trips_2019$tripduration), "seconds")
+paste("The most popular day of booking was", mfv(trips_2019$day), "in 2019")
+paste("The most popular month of booking was", mfv(trips_2019$month))
+
+# creating a new dataframe
+trips_2019_pivot <- trips_2019 %>%
+  group_by(usertype) %>%
+  summarize("Average Ride Length" = round(mean(tripduration), digits = 2),
+            "Number of Rides" = length(trip_id),
+            "Year" = year(trips_2019$start_time), .groups = 'drop')
+trips_2019_pivot <- unique(trips_2019_pivot)
+
+# pivot table
+qhpvt(trips_2019, rows = 'day', columns = 'usertype', calculations = c("Average Ride Length" = "round(mean(tripduration), digits = 2)", "Number of rides" = "length(trip_id)"))
+```
+### Data visualisation 
+```{r}
+# Number of riders in 2019
+p1 <- ggplot(trips_2019, mapping = aes(x = day, fill = usertype)) +
+  geom_bar(position = 'dodge') + scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3)) +
+  labs(x = "Weekdays", y = "Number of Riders"
+       ,title = " Divvy Bikes riders data"
+       ,subtitle = "Year : 2019 (Weekly)" +
+         scale_fill_discrete(name = "Type of Riders", labels = c("Casual Riders","Annual Member Riders")) +
+theme(text = element_text(size = 10))) 
+
+# Trip duration of riders in 2019
+p2 <- ggplot(trips_2019, mapping = aes(x = day, y = tripduration)) + 
+  geom_col() + facet_wrap(~usertype) + scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +
+  labs(x = "Week Days", y = "Total Trip Duration (in Seconds)", 
+       title = "Trip Duration of the Riders (Year: 2019)",
+       subtitle = "The graph represents the total trip duration of riders everday of the week in 2019.") +
+    theme(axis.text.x = element_text(angle = 45), text = element_text(size = 10))
+fig(18, 15)
+grid.arrange(p1, p2)
+
+```
+
+# Divvy bikes 2020 Dataset
+```{r}
+# importing and combining all related datasets
+trips_2020 <- rbind(read_csv("Data sources/Divvy_Trips_2020_Q1.csv"), read_csv("Data sources/202004-divvy-tripdata.csv"), read_csv("Data sources/202005-divvy-tripdata.csv"), read_csv("Data sources/202006-divvy-tripdata.csv"), read_csv("Data sources/202007-divvy-tripdata.csv"), read_csv("Data sources/202008-divvy-tripdata.csv"), read_csv("Data sources/202009-divvy-tripdata.csv"), read_csv("Data sources/202010-divvy-tripdata.csv"), read_csv("Data sources/202011-divvy-tripdata.csv"), read_csv("Data sources/202012-divvy-tripdata.csv"))
+
+trips_2020 <- rename(trips_2020, trip_id = ride_id
+                     ,start_time = started_at
+                     ,end_time = ended_at
+                     ,usertype = member_casual)
+trips_2020 <- mutate(trips_2020, tripduration = abs(end_time - start_time))
+                            
+# data transformation and wrangling
+trips_2020 <- select(trips_2020, -start_station_id, -end_station_id)
+trips_2020$usertype[trips_2020$usertype == 'Subscriber'] <- "Member"
+trips_2020$usertype[trips_2020$usertype == 'Customer'] <- "Casual"
+trips_2020$start_time <- anytime(trips_2020$start_time)
+trips_2020$day <- wday(trips_2020$start_time, label = TRUE, abbr = FALSE)
+trips_2020$month <- month(trips_2020$start_time, label = TRUE, abbr = FALSE)
+
+
+```
+
+### Data Analysis
+```{r}
+paste("The Average time riders spent riding bikes in 2020:", round(mean(trips_2020$tripduration), digits = 2), "seconds")
+paste("The longest duration a rider used the bike in 2020 was", max(trips_2020$tripduration), "seconds")
+paste("The most popular day of booking was", mfv(trips_2020$day), "in 2020")
+paste("The most popular month of booking was", mfv(trips_2020$month))
+
+# creating a new dataframe
+trips_2020_pivot <- trips_2020 %>%
+  group_by(usertype) %>%
+  summarize("Average Ride Length" = round(mean(tripduration), digits = 2),
+            "Number of Rides" = length(trip_id),
+            "Year" = year(trips_2020$start_time), .groups = 'drop')
+trips_2020_pivot <- unique(trips_2020_pivot)
+
+# pivot table
+qhpvt(trips_2020, rows = 'day', columns = 'usertype', calculations = c("Average Ride Length" = "round(mean(as.integer(tripduration)), digits = 2)", "Number of rides" = "length(trip_id)"))
+```
+### Data visualisation 
+```{r}
+# Number of riders in 2020
+p1 <- ggplot(trips_2020, mapping = aes(x = day, fill = usertype)) +
+  geom_bar(position = 'dodge') + scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3)) +
+  labs(x = "Weekdays", y = "Number of Riders"
+       ,title = " Divvy Bikes riders data"
+       ,subtitle = "Year : 2020 (Weekly)" +
+         scale_fill_discrete(name = "Type of Riders", labels = c("Casual","Member")) +
+theme(text = element_text(size = 10))) 
+
+# Trip duration of riders in 2020
+p2 <- ggplot(trips_2020, mapping = aes(x = day, y = tripduration)) + 
+  geom_col() + facet_wrap(~usertype) + scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +
+  labs(x = "Week Days", y = "Total Trip Duration (in Seconds)", 
+       title = "Trip Duration of the Riders (Year: 2020)",
+       subtitle = "The graph represents the total trip duration of riders everday of the week in 2020.") +
+    theme(axis.text.x = element_text(angle = 45), text = element_text(size = 10))
+fig(18, 15)
+grid.arrange(p1, p2)
+
+```
+
+
+# Divvy bikes 2020 Dataset
+```{r}
+# importing and combining all related datasets
+trips_2021 <- rbind(read_csv("Data sources/202101-divvy-tripdata.csv"), read_csv("Data sources/202102-divvy-tripdata.csv"), read_csv("Data sources/202103-divvy-tripdata.csv"), read_csv("Data sources/202104-divvy-tripdata.csv"), read_csv("Data sources/202105-divvy-tripdata.csv"), read_csv("Data sources/202106-divvy-tripdata.csv"), read_csv("Data sources/202107-divvy-tripdata.csv"), read_csv("Data sources/202108-divvy-tripdata.csv"), read_csv("Data sources/202109-divvy-tripdata.csv"), read_csv("Data sources/202110-divvy-tripdata.csv"))
+
+trips_2021 <- rename(trips_2021, trip_id = ride_id
+                     ,start_time = started_at
+                     ,end_time = ended_at
+                     ,usertype = member_casual)
+trips_2021 <- mutate(trips_2021, tripduration = abs(end_time - start_time))
+                            
+# data transformation and wrangling
+trips_2021 <- select(trips_2021, -start_station_id, -end_station_id)
+trips_2021$usertype[trips_2021$usertype == 'Subscriber'] <- "Member"
+trips_2021$usertype[trips_2021$usertype == 'Customer'] <- "Casual"
+trips_2021$start_time <- anytime(trips_2021$start_time)
+trips_2021$day <- wday(trips_2021$start_time, label = TRUE, abbr = FALSE)
+trips_2021$month <- month(trips_2021$start_time, label = TRUE, abbr = FALSE)
+
+
+```
+
+### Data Analysis
+```{r}
+paste("The Average time riders spent riding bikes in 2021:", round(mean(trips_2021$tripduration), digits = 2), "seconds")
+paste("The longest duration a rider used the bike in 2021 was", max(trips_2021$tripduration), "seconds")
+paste("The most popular day of booking was", mfv(trips_2021$day), "in 2021")
+paste("The most popular month of booking was", mfv(trips_2021$month))
+
+# creating a new dataframe
+trips_2021_pivot <- trips_2021 %>%
+  group_by(usertype) %>%
+  summarize("Average Ride Length" = round(mean(tripduration), digits = 2),
+            "Number of Rides" = length(trip_id),
+            "Year" = year(trips_2021$start_time), .groups = 'drop')
+trips_2021_pivot <- unique(trips_2021_pivot)
+
+# pivot table
+qhpvt(trips_2021, rows = 'day', columns = 'usertype', calculations = c("Average Ride Length" = "round(mean(as.integer(tripduration)), digits = 2)", "Number of rides" = "length(trip_id)"))
+```
+### Data visualisation 
+```{r}
+# Data Visualization
+# Number of Riders in the year of 2021
+p1 <- ggplot(trips_2021, mapping = aes(x = day, fill = usertype)) +
+  geom_bar(position = "dodge")+ scale_y_continuous(labels = unit_format(unit = "K", scale = 1e-3)) + 
+  labs(x = "Week Days", y = "Number of Riders", 
+       title = "Divvy bikes riders data",
+       subtitle = "Year: 2021 (Weekly)" ) +
+  scale_fill_discrete(name = "Type of Riders", labels = c("Casual Riders","Member Riders")) +
+theme(text = element_text(size = 10)) 
+
+# Trip duration of riders in 2021
+p2 <- ggplot(trips_2021, mapping = aes(x = day, y = tripduration)) + 
+  geom_col() + facet_wrap(~usertype) + scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +
+  labs(x = "Week Days", y = "Total Trip Duration (in Seconds)", 
+       title = "Trip Duration of the Riders (Year: 2021)",
+       subtitle = "The graph represents the total trip duration of riders on everday of the week in 2021.") +
+    theme(axis.text.x = element_text(angle =45), text = element_text(size = 10))
+fig(18, 15)
+grid.arrange(p1, p2)
+```
+
+# Conclusive study
+```{r}
+# data combining
+data <- rbind(trips_2013_pivot, trips_2014_pivot, trips_2015_pivot, trips_2016_pivot, trips_2017_pivot, trips_2018_pivot, trips_2019_pivot, trips_2020_pivot, trips_2021_pivot)
+
+data <- as.data.frame(data)
+data$usertype[data$usertype == 'casual'] <- "Casual"
+data$usertype[data$usertype == 'member'] <- "Member"
+
+# Data Visualization
+# Average Ride Length of Riders from 2013 to 2021
+p1 <- ggplot(data = data, aes(x = factor(Year), shape = usertype)) +
+  geom_point(aes(y = `Average Ride Length`, color = usertype), size = 3.5) +
+  labs(x = "Years", y = "Average Ride Length (in seconds)", 
+       title = "Average Ride Length spent by Riders every year",
+       subtitle = "The graph shows average length or time spent by the Casual Riders is significantly higher 
+than Dependent and Annual Member Riders.")+
+theme(text = element_text(size = 10)) 
+
+# Number of Rides taken by Riders from 2013 to 2021
+p2<- ggplot(data, mapping = aes(x = factor(Year), y = `Number of Rides`, fill = `usertype`)) +
+  geom_bar(stat = 'identity') + scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +
+  labs(x = "Years", y = "Number of Rides", 
+       title = "Number of Rides taken by Riders from 2013-2021",
+       subtitle = "The graph shows that Annual Member Riders have taken more rides than Casual Riders.")+
+theme(text = element_text(size = 10)) 
+fig(18, 15)
+grid.arrange(p1, p2)
+```
